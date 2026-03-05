@@ -1,3 +1,6 @@
-export const botname = "Farid-Bot"
-export const ownername = "Farid"
-export const prefix = "."
+export const config = {
+botName: "farid-bot",
+ownerName: "farid",
+ownerNumber: "628388407448",
+prefix: ".",
+}
