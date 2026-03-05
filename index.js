@@ -95,6 +95,9 @@ if(!text.startsWith(prefix)) return
 
 const command = text.slice(1).split(" ")[0]
 
+console.log("Pesan masuk:", text)
+console.log("Command:", command)
+
 switch(command){
 case "profile":
 
