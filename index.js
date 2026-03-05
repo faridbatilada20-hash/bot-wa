@@ -69,6 +69,95 @@ console.log("✅ BOT FARID CONNECTED")
 })
 
 sock.ev.on("messages.upsert", async ({ messages, type }) => {
+
+if(type !== "notify") return
+
+const m = messages[0]
+if(!m.message) return
+
+const from = m.key.remoteJid
+
+const sender = m.key.fromMe
+? sock.user.id
+: (m.key.participant || m.key.remoteJid)
+
+const pushname = m.pushName || "User"
+
+const text =
+m.message?.conversation ||
+m.message?.extendedTextMessage?.text ||
+m.message?.imageMessage?.caption ||
+""
+
+if(!text) return
+
+if(selfMode && !sender.includes(owner)) return
+if(!text.startsWith(prefix)) return
+
+const command = text.slice(1).split(" ")[0]
+
+console.log("Pesan masuk:", text)
+console.log("Command:", command)
+
+switch(command){
+
+case "menu":
+
+let pp
+
+try{
+pp = await sock.profilePictureUrl(sender,"image")
+}catch{
+pp = "https://telegra.ph/file/6880771a42bad09dd6087.jpg"
+}
+
+let menu = `
+╭──❍「 USER INFO 」❍
+├ Nama : ${pushname}
+├ Nomor : ${sender.split("@")[0]}
+├ User : Member
+╰────❍
+
+╭──❍「 BOT INFO 」❍
+├ Bot : farid-bot
+├ Owner : ${owner}
+├ Mode : ${selfMode ? "SELF" : "PUBLIC"}
+╰────❍
+
+╭──❍「 MENU 」❍
+│ .menu
+│ .profile
+│ .self
+│ .selfout
+│ .owner
+╰────❍
+`
+
+await sock.sendMessage(from,{
+image:{url:pp},
+caption:menu
+})
+
+break
+
+case "owner":
+
+await sock.sendMessage(from,{
+text:"Owner : "+owner
+})
+
+break
+
+case "profile":
+
+await sock.sendMessage(from,{
+text:`Nama : ${pushname}\nNomor : ${sender.split("@")[0]}`
+})
+
+break
+
+}
+})
 if(type !== "notify") return
 
 const m = messages[0]
