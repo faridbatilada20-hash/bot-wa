@@ -1,4 +1,8 @@
-import makeWASocket, { useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys"
+import makeWASocket, {
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion
+} from "@whiskeysockets/baileys"
+
 import readline from "readline"
 
 const rl = readline.createInterface({
@@ -15,13 +19,34 @@ async function startBot() {
 
   const sock = makeWASocket({
     version,
-    auth: state
+    auth: state,
+    printQRInTerminal: false
   })
 
-  const phone = await question("Masukkan nomor WA: ")
-  const code = await sock.requestPairingCode(phone)
+  sock.ev.on("connection.update", async (update) => {
 
-  console.log("Pairing Code:", code)
+    const { connection } = update
+
+    if (connection === "open") {
+      console.log("✅ Bot berhasil connect ke WhatsApp")
+    }
+
+    if (connection === "close") {
+      console.log("❌ Koneksi terputus, mencoba ulang...")
+      startBot()
+    }
+
+  })
+
+  if (!sock.authState.creds.registered) {
+
+    const phone = await question("Masukkan nomor WA (628xxx): ")
+
+    const code = await sock.requestPairingCode(phone)
+
+    console.log("🔑 Pairing Code:", code)
+
+  }
 
   sock.ev.on("creds.update", saveCreds)
 }
