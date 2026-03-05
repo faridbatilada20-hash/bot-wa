@@ -96,6 +96,52 @@ if(!text.startsWith(prefix)) return
 const command = text.slice(1).split(" ")[0]
 
 switch(command){
+case "profile":
+
+let ppfoto
+
+try{
+ppfoto = await sock.profilePictureUrl(sender, "image")
+}catch{
+ppfoto = "https://telegra.ph/file/6880771a42bad09dd6087.jpg"
+}
+
+let statusUser = "Member"
+
+// detect owner
+if(sender.includes(owner)){
+statusUser = "Owner"
+}
+
+// detect admin group
+if(from.endsWith("@g.us")){
+let groupMetadata = await sock.groupMetadata(from)
+let admins = groupMetadata.participants
+.filter(v => v.admin !== null)
+.map(v => v.id)
+
+if(admins.includes(sender)){
+statusUser = "Admin Group"
+}
+}
+
+let chatType = from.endsWith("@g.us") ? "Group" : "Private"
+
+let textProfile = `
+╭──❍「 PROFILE 」❍
+├ Nama : ${pushname}
+├ Nomor : ${sender.split("@")[0]}
+├ Status : ${statusUser}
+├ Chat : ${chatType}
+╰────❍
+`
+
+await sock.sendMessage(from,{
+image:{url:ppfoto},
+caption:textProfile
+})
+
+break
 
 case "self":
 
@@ -144,11 +190,11 @@ let menu = `
 
 ╭─┴❍「 BOT MENU 」❍
 │□ .menu
-│□ .ping
 │□ .runtime
 │□ .owner
 │□ .self
 │□ .selfout
+│□ .profile
 ╰────❍
 `
 
