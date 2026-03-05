@@ -24,7 +24,8 @@ const sock = makeWASocket({
 logger: pino({ level: "silent" }),
 printQRInTerminal: false,
 auth: state,
-version
+version,
+emitOwnEvents: true
 })
 
 sock.ev.on("creds.update", saveCreds)
@@ -68,6 +69,7 @@ sock.ev.on("messages.upsert", async ({ messages }) => {
 const m = messages[0]
 
 if(!m.message) return
+if(m.key.fromMe) return
 
 const msg = m.message.conversation ||
 m.message.extendedTextMessage?.text
