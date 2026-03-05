@@ -68,7 +68,8 @@ console.log("✅ BOT FARID CONNECTED")
 
 })
 
-sock.ev.on("messages.upsert", async ({ messages }) => {
+sock.ev.on("messages.upsert", async ({ messages, type }) => {
+if(type !== "notify") return
 
 const m = messages[0]
 if(!m.message) return
@@ -201,7 +202,7 @@ let menu = `
 ╰────❍
 `
 
-sock.sendMessage(from,{
+await sock.sendMessage(from,{
 image:{url:pp},
 caption:menu
 })
