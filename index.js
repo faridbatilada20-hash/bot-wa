@@ -1,80 +1,178 @@
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys"
-import pino from "pino"
-import { botname, ownername, prefix } from "./config.js"
+import makeWASocket, { 
+useMultiFileAuthState, 
+fetchLatestBaileysVersion 
+} from "@whiskeysockets/baileys"
+
+import readline from "readline"
+
+const rl = readline.createInterface({
+input: process.stdin,
+output: process.stdout
+})
+
+const question = (text) => {
+return new Promise(resolve => rl.question(text, resolve))
+}
 
 async function startBot() {
 
-const { state, saveCreds } = await useMultiFileAuthState("session")
+const { state, saveCreds } = await useMultiFileAuthState("./session")
+
+const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
-logger: pino({ level: "silent" }),
+version,
 auth: state
 })
 
+if (!sock.authState.creds.registered) {
+
+const phone = await question("Masukkan nomor WA (628xxx): ")
+
+const code = await sock.requestPairingCode(phone)
+
+console.log("Pairing Code:", code)
+
+}
+
 sock.ev.on("creds.update", saveCreds)
 
-if(!sock.authState.creds.registered){
-const phone = await question("Masukkan nomor WA: ")
-const code = await sock.requestPairingCode(phone)
-console.log("Pairing Code:", code)
-}
+sock.ev.on("messages.upsert", async ({ messages }) => {
 
-sock.ev.on("messages.upsert", async (msg) => {
+const msg = messages[0]
+if (!msg.message) return
 
-let m = msg.messages[0]
-if(!m.message) return
+const from = msg.key.remoteJid
+const sender = msg.key.participant || msg.key.remoteJid
+const pushname = msg.pushName || "User"
 
-let text = m.message.conversation || m.message.extendedTextMessage?.text
-let from = m.key.remoteJid
+const text =
+msg.message.conversation ||
+msg.message.extendedTextMessage?.text ||
+""
 
-if(!text.startsWith(prefix)) return
+const command = text.split(" ")[0]
 
-let command = text.slice(1).split(" ")[0]
+/* ================= MENU ================= */
 
-if(command === "menu"){
+if (command === ".menu") {
 
-let menu = `
-🤖 ${botname}
+const now = new Date()
+const jam = now.toLocaleTimeString("id-ID")
+const tanggal = now.toLocaleDateString("id-ID")
+const hari = now.toLocaleDateString("id-ID",{ weekday:"long" })
 
-Owner: ${ownername}
+const menu = `
+╭──❍「 *USER INFO* 」❍
+├ *Nama* : ${pushname}
+├ *Id* : @${sender.split("@")[0]}
+├ *User* : Member
+├ *Limit* : Infinity
+├ *Money* : 0
+╰─┬────❍
 
-MENU BOT
-.menu
-.ping
-.owner
+╭─┴─❍「 *BOT INFO* 」❍
+├ *Nama Bot* : farid-bot
+├ *Powered* : WhatsApp
+├ *Owner* : +628388407448
+├ *Mode* : Public
+├ *Prefix* : .
+├ *Premium Feature* : 🔸️
+╰─┬────❍
 
-MENU GROUP
-.kick
-.add
-.promote
-.demote
-.tagall
+╭─┴─❍「 *ABOUT* 」❍
+├ *Tanggal* : ${tanggal}
+├ *Hari* : ${hari}
+├ *Jam* : ${jam}
+╰──────❍
 
-MENU GAME
-.slot
-.math
-.tebak
+╭──❍「 *BOT* 」❍
+│□ .profile
+│□ .claim
+│□ .buy
+│□ .transfer
+│□ .leaderboard
+│□ .runtime
+│□ .speed
+│□ .ping
+│□ .afk
+╰─┬────❍
 
-MENU TOOLS
-.sticker
-.play
-.ytmp3
-.ytmp4
-.tiktok
+╭─┴❍「 *GROUP* 」❍
+│□ .add
+│□ .kick
+│□ .promote
+│□ .demote
+│□ .tagall
+│□ .hidetag
+│□ .linkgrup
+╰─┬────❍
 
-Total Fitur: 250+
+╭─┴❍「 *DOWNLOAD* 」❍
+│□ .ytmp3
+│□ .ytmp4
+│□ .tiktok
+│□ .instagram
+│□ .facebook
+╰─┬────❍
+
+╭─┴❍「 *AI* 」❍
+│□ .ai
+│□ .gemini
+│□ .txt2img
+╰─┬────❍
+
+╭─┴❍「 *GAME* 」❍
+│□ .slot
+│□ .math
+│□ .tictactoe
+│□ .casino
+│□ .tebakgambar
+╰─┬────❍
+
+╭─┴❍「 *FUN* 」❍
+│□ .dadu
+│□ .bisakah
+│□ .apakah
+│□ .kapan
+│□ .siapa
+╰─┬────❍
+
+╭─┴❍「 *OWNER* 」❍
+│□ .join
+│□ .leave
+│□ .block
+│□ .ban
+│□ .unban
+│□ .backup
+╰──────❍
 `
 
-await sock.sendMessage(from,{ text: menu })
+await sock.sendMessage(from,{
+text: menu,
+mentions: [sender]
+})
 
 }
 
-if(command === "ping"){
-await sock.sendMessage(from,{ text:"Bot aktif ✅"})
+/* ================= PING ================= */
+
+if (command === ".ping") {
+
+await sock.sendMessage(from,{
+text: "🏓 Pong! Bot Aktif"
+})
+
 }
 
-if(command === "owner"){
-await sock.sendMessage(from,{ text:`Owner: ${ownername}`})
+/* ================= OWNER ================= */
+
+if (command === ".owner") {
+
+await sock.sendMessage(from,{
+text: "Owner Bot: Farid"
+})
+
 }
 
 })
@@ -82,3 +180,5 @@ await sock.sendMessage(from,{ text:`Owner: ${ownername}`})
 }
 
 startBot()
+
+
