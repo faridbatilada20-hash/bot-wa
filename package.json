@@ -1,14 +1,11 @@
 {
-  "name": "farid-bot",
-  "version": "1.0.0",
-  "description": "Farid WhatsApp Bot",
-  "main": "index.js",
-  "type": "module",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.0",
-    "pino": "^8.0.0"
-  }
+"name": "farid-bot",
+"version": "1.0.0",
+"type": "module",
+"main": "index.js",
+"dependencies": {
+"@hapi/boom": "^10.0.0",
+"@whiskeysockets/baileys": "^6.7.0",
+"pino": "^8.0.0"
+}
 }
