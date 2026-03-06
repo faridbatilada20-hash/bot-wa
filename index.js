@@ -84,6 +84,14 @@ switch(command){
 
 case "menu":
 
+let ppuser
+
+try {
+ppuser = await sock.profilePictureUrl(sender, "image")
+} catch {
+ppuser = "https://i.ibb.co/2kRZ7Qk/user.png"
+}
+
 let menu = `╭──❍「 USER INFO 」❍
 ├ Nama : ${msg.pushName}
 ├ Id : ${sender.split("@")[0]}
@@ -107,7 +115,11 @@ let menu = `╭──❍「 USER INFO 」❍
 │□ .claim
 ╰────❍`
 
-await sock.sendMessage(from,{ text: menu })
+await sock.sendMessage(from,{
+image:{ url: ppuser },
+caption: menu
+})
+
 break
 
 
