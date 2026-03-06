@@ -1,24 +1,16 @@
-import makeWASocket,{
+import makeWASocket, {
 DisconnectReason,
 useMultiFileAuthState,
 fetchLatestBaileysVersion
 } from "@whiskeysockets/baileys"
 
 import pino from "pino"
-import readline from "readline"
 import { Boom } from "@hapi/boom"
 
 const owner = "628388407448"
 const prefix = "."
 
-let selfMode = false
-
-const rl = readline.createInterface({
-input: process.stdin,
-output: process.stdout
-})
-
-const question = (text) => new Promise(resolve => rl.question(text, resolve))
+const startTime = Date.now()
 
 async function startBot(){
 
@@ -29,26 +21,11 @@ const sock = makeWASocket({
 logger: pino({ level: "silent" }),
 auth: state,
 version,
-emitOwnEvents: true,
-printQRInTerminal: false
+browser: ["farid-bot","Chrome","1.0.0"],
+emitOwnEvents: true
 })
 
 sock.ev.on("creds.update", saveCreds)
-
-if(!sock.authState.creds.registered){
-
-const phone = await question("Masukkan nomor WA: ")
-
-const code = await sock.requestPairingCode(phone)
-
-console.log(`
-========================
-PAIRING CODE
-${code}
-========================
-`)
-
-}
 
 sock.ev.on("connection.update",(update)=>{
 
@@ -60,7 +37,6 @@ const shouldReconnect =
 (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
 
 if(shouldReconnect){
-console.log("Reconnect...")
 startBot()
 }
 
@@ -74,12 +50,16 @@ console.log("✅ BOT FARID CONNECTED")
 
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
+try{
+
 const m = messages[0]
 if(!m.message) return
 
 const from = m.key.remoteJid
+const isGroup = from.endsWith("@g.us")
 
-const sender = m.key.fromMe
+const sender =
+m.key.fromMe
 ? sock.user.id
 : (m.key.participant || m.key.remoteJid)
 
@@ -90,9 +70,6 @@ m.message?.imageMessage?.caption ||
 ""
 
 if(!text) return
-
-if(selfMode && !sender.includes(owner)) return
-
 if(!text.startsWith(prefix)) return
 
 const command = text.slice(1).split(" ")[0]
@@ -103,6 +80,7 @@ console.log("Pesan:", text)
 
 switch(command){
 
+// MENU
 case "menu":
 
 let pp
@@ -112,6 +90,8 @@ pp = await sock.profilePictureUrl(sender,"image")
 }catch{
 pp = "https://telegra.ph/file/6880771a42bad09dd6087.jpg"
 }
+
+let runtime = Math.floor((Date.now() - startTime)/1000)
 
 let menu = `
 ╭──❍「 USER INFO 」❍
@@ -124,18 +104,16 @@ let menu = `
 ╭─┴─❍「 BOT INFO 」❍
 ├ Nama Bot : farid-bot
 ├ Owner : ${owner}
-├ Mode : ${selfMode ? "SELF" : "PUBLIC"}
+├ Runtime : ${runtime}s
 ├ Prefix : .
 ╰─┬────❍
 
 ╭─┴❍「 BOT MENU 」❍
 │□ .menu
 │□ .profile
-│□ .ping
 │□ .owner
+│□ .ping
 │□ .runtime
-│□ .self
-│□ .selfout
 ╰────❍
 `
 
@@ -147,6 +125,7 @@ caption:menu
 break
 
 
+// PROFILE
 case "profile":
 
 let ppfoto
@@ -163,73 +142,73 @@ if(sender.includes(owner)){
 statusUser = "Owner"
 }
 
-if(from.endsWith("@g.us")){
-let metadata = await sock.groupMetadata(from)
+if(isGroup){
 
-let admins = metadata.participants
-.filter(v=>v.admin!==null)
-.map(v=>v.id)
+let groupMetadata = await sock.groupMetadata(from)
+
+let admins = groupMetadata.participants
+.filter(v => v.admin !== null)
+.map(v => v.id)
 
 if(admins.includes(sender)){
 statusUser = "Admin Group"
 }
+
 }
 
-let chatType = from.endsWith("@g.us") ? "Group" : "Private"
-
-let textProfile = `
+let profile = `
 ╭──❍「 PROFILE 」❍
 ├ Nama : ${pushname}
 ├ Nomor : ${sender.split("@")[0]}
 ├ Status : ${statusUser}
-├ Chat : ${chatType}
+├ Chat : ${isGroup ? "Group" : "Private"}
 ╰────❍
 `
 
 await sock.sendMessage(from,{
 image:{url:ppfoto},
-caption:textProfile
+caption:profile
 })
 
 break
 
 
-case "self":
-
-if(!sender.includes(owner)) return
-
-selfMode = true
-
-sock.sendMessage(from,{text:"Bot sekarang SELF MODE"})
-break
-
-
-case "selfout":
-
-if(!sender.includes(owner)) return
-
-selfMode = false
-
-sock.sendMessage(from,{text:"Bot sekarang PUBLIC MODE"})
-break
-
-
-case "ping":
-
-sock.sendMessage(from,{text:"🏓 Pong"})
-break
-
-
+// OWNER
 case "owner":
 
-sock.sendMessage(from,{text:"Owner : "+owner})
+await sock.sendMessage(from,{
+text:"Owner Bot : "+owner
+})
+
 break
 
 
+// PING
+case "ping":
+
+await sock.sendMessage(from,{
+text:"🏓 Pong"
+})
+
+break
+
+
+// RUNTIME
 case "runtime":
 
-sock.sendMessage(from,{text:"Bot sedang berjalan"})
+let run = Math.floor((Date.now() - startTime)/1000)
+
+await sock.sendMessage(from,{
+text:"Bot sudah berjalan "+run+" detik"
+})
+
 break
+
+}
+
+}catch(err){
+
+console.log("ERROR:",err)
 
 }
 
