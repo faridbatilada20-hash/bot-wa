@@ -1,51 +1,45 @@
-import makeWASocket, {
-DisconnectReason,
-useMultiFileAuthState,
-fetchLatestBaileysVersion
+import makeWASocket, { 
+DisconnectReason, 
+useMultiFileAuthState, 
+fetchLatestBaileysVersion 
 } from "@whiskeysockets/baileys"
 
 import P from "pino"
-import fs from "fs"
 
+const owner = "628388407448@s.whatsapp.net"
+const botName = "FARID-MD"
 const prefix = "."
-const owner = "628388407448"
-const botname = "farid-bot"
 
-const dbFile = "./database.json"
+let userDB = {}
+let afk = {}
 
-if (!fs.existsSync(dbFile)) {
-fs.writeFileSync(dbFile, JSON.stringify({ users:{} }))
-}
-
-let db = JSON.parse(fs.readFileSync(dbFile))
-
-function saveDB(){
-fs.writeFileSync(dbFile, JSON.stringify(db,null,2))
-}
-
-function runtime(seconds){
+function runtime(seconds) {
 seconds = Number(seconds)
-const h = Math.floor(seconds / 3600)
-const m = Math.floor(seconds % 3600 / 60)
-const s = Math.floor(seconds % 60)
-return `${h}h ${m}m ${s}s`
+var d = Math.floor(seconds / (3600*24))
+var h = Math.floor(seconds % (3600*24) / 3600)
+var m = Math.floor(seconds % 3600 / 60)
+var s = Math.floor(seconds % 60)
+return `${d}d ${h}h ${m}m ${s}s`
 }
 
 async function startBot(){
 
-const { state, saveCreds } = await useMultiFileAuthState("session")
+const { state, saveCreds } = await useMultiFileAuthState("./session")
+
 const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
-logger: P({ level: "silent" }),
-printQRInTerminal: true,
+logger: P({ level:"silent" }),
+printQRInTerminal:true,
 auth: state,
 version
 })
 
 sock.ev.on("creds.update", saveCreds)
 
-sock.ev.on("connection.update", ({ connection }) => {
+sock.ev.on("connection.update", (update) => {
+
+const { connection } = update
 
 if(connection === "open"){
 console.log("✅ BOT FARID CONNECTED")
@@ -55,54 +49,83 @@ console.log("✅ BOT FARID CONNECTED")
 
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
-const msg = messages[0]
-if (!msg.message) return
-if (msg.key.remoteJid === "status@broadcast") return
+try{
 
-const from = msg.key.remoteJid
-const sender = msg.key.participant || msg.key.remoteJid
+const m = messages[0]
+
+if(!m.message) return
+if(m.key && m.key.remoteJid === "status@broadcast") return
+
+const from = m.key.remoteJid
+const sender = m.key.fromMe ? sock.user.id : m.key.participant || m.key.remoteJid
 
 const body =
-msg.message.conversation ||
-msg.message.extendedTextMessage?.text ||
+m.message.conversation ||
+m.message.extendedTextMessage?.text ||
+m.message.imageMessage?.caption ||
 ""
 
-if (!body.startsWith(prefix)) return
+if(!body.startsWith(prefix)) return
 
-const command = body.slice(1).split(" ")[0]
+const command = body.slice(1).split(" ")[0].toLowerCase()
+const text = body.split(" ").slice(1).join(" ")
 
-if (!db.users[sender]){
-db.users[sender] = {
+console.log("Pesan:", command)
+
+const reply = (text) => sock.sendMessage(from,{text},{quoted:m})
+
+if(!userDB[sender]){
+userDB[sender] = {
+limit: Infinity,
 money: 0,
 lastclaim: 0
 }
 }
 
-const user = db.users[sender]
+if(afk[sender]){
+delete afk[sender]
+reply("AFK dimatikan")
+}
+
+let mentionUser = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
+
+for(let user of mentionUser){
+
+if(afk[user]){
+reply(`@${user.split("@")[0]} sedang AFK\nAlasan: ${afk[user].reason}`,{
+mentions:[user]
+})
+}
+
+}
 
 switch(command){
 
-case "menu":
+case "menu":{
 
-let ppuser
+let name = sender.split("@")[0]
 
-try {
-ppuser = await sock.profilePictureUrl(sender, "image")
-} catch {
-ppuser = "https://i.ibb.co/2kRZ7Qk/user.png"
+let pp
+try{
+pp = await sock.profilePictureUrl(sender,"image")
+}catch{
+pp = "https://i.ibb.co/2Wz0n6T/avatar.png"
 }
 
-let menu = `╭──❍「 USER INFO 」❍
-├ Nama : ${msg.pushName}
-├ Id : ${sender.split("@")[0]}
+let uptime = runtime(process.uptime())
+
+let teks = `
+╭──❍「 USER INFO 」❍
+├ Nama : ${name}
+├ Id : ${name}
 ├ User : Member
 ├ Limit : Infinity
 ╰─┬────❍
 
 ╭─┴─❍「 BOT INFO 」❍
-├ Nama Bot : ${botname}
-├ Owner : ${owner}
-├ Runtime : ${runtime(process.uptime())}
+├ Nama Bot : farid-bot
+├ Owner : 628388407448
+├ Runtime : ${uptime}
 ├ Prefix : .
 ╰─┬────❍
 
@@ -113,92 +136,106 @@ let menu = `╭──❍「 USER INFO 」❍
 │□ .ping
 │□ .runtime
 │□ .claim
-╰────❍`
+│□ .afk
+╰────❍
+`
 
 await sock.sendMessage(from,{
-image:{ url: ppuser },
-caption: menu
-})
+image:{url:pp},
+caption:teks,
+mentions:[sender]
+},{quoted:m})
 
+}
 break
 
+case "profile":{
 
-case "profile":
+let name = sender.split("@")[0]
+
+let isAdmin = "Member"
+
+if(from.endsWith("@g.us")){
+let meta = await sock.groupMetadata(from)
+let admin = meta.participants.find(v=>v.id===sender && v.admin)
+if(admin) isAdmin = "Admin"
+}
+
+let pp
+try{
+pp = await sock.profilePictureUrl(sender,"image")
+}catch{
+pp = "https://i.ibb.co/2Wz0n6T/avatar.png"
+}
+
+let teks = `
+╭──❍ PROFILE ❍
+├ Nama : ${name}
+├ Nomor : ${name}
+├ Status : ${isAdmin}
+├ Money : ${userDB[sender].money}
+├ Limit : Infinity
+╰────❍
+`
 
 await sock.sendMessage(from,{
-text:`👤 PROFILE
+image:{url:pp},
+caption:teks
+},{quoted:m})
 
-Nama : ${msg.pushName}
-ID : ${sender.split("@")[0]}
-Money : ${user.money}`
-})
+}
 break
-
 
 case "owner":
-
-await sock.sendMessage(from,{
-text:`👑 Owner Bot
-wa.me/${owner}`
-})
+reply("Owner : 628388407448")
 break
-
 
 case "ping":
-
-await sock.sendMessage(from,{
-text:"🏓 Pong!"
-})
+reply("Pong 🏓")
 break
-
 
 case "runtime":
-
-await sock.sendMessage(from,{
-text:`⏱ Runtime : ${runtime(process.uptime())}`
-})
+reply(runtime(process.uptime()))
 break
 
-
-case "claim":
+case "claim":{
 
 let now = Date.now()
-let sehari = 86400000
 
-if(now - user.lastclaim < sehari){
+if(now - userDB[sender].lastclaim < 86400000){
+return reply("Kamu sudah claim hari ini")
+}
 
-let sisa = sehari - (now - user.lastclaim)
+let reward = 1000
 
-let jam = Math.floor(sisa / 3600000)
-let menit = Math.floor(sisa / 60000) % 60
+userDB[sender].money += reward
+userDB[sender].lastclaim = now
 
-await sock.sendMessage(from,{
-text:`❌ Kamu sudah claim hari ini
+reply(`Claim berhasil\nMoney +${reward}`)
 
-Coba lagi dalam
-${jam} jam ${menit} menit`
-})
+}
+break
 
-} else {
+case "afk":{
 
-let hadiah = Math.floor(Math.random() * 5000) + 1000
+let reason = text || "tidak ada alasan"
 
-user.money += hadiah
-user.lastclaim = now
-saveDB()
+afk[sender] = {
+reason,
+time:Date.now()
+}
 
-await sock.sendMessage(from,{
-text:`🎁 CLAIM BERHASIL
-
-Kamu mendapat 💰 ${hadiah}
-
-Total uang : ${user.money}`
+reply(`@${sender.split("@")[0]} sekarang AFK\nAlasan: ${reason}`,{
+mentions:[sender]
 })
 
 }
-
 break
 
+}
+
+}catch(e){
+console.log(e)
 }
 
 })
