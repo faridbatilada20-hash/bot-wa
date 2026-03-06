@@ -4,107 +4,97 @@ useMultiFileAuthState,
 fetchLatestBaileysVersion
 } from "@whiskeysockets/baileys"
 
-import pino from "pino"
-import { Boom } from "@hapi/boom"
+import P from "pino"
+import fs from "fs"
 
-const owner = "628388407448"
 const prefix = "."
+const owner = "628388407448"
+const botname = "farid-bot"
 
-const startTime = Date.now()
+const dbFile = "./database.json"
+
+if (!fs.existsSync(dbFile)) {
+fs.writeFileSync(dbFile, JSON.stringify({ users:{} }))
+}
+
+let db = JSON.parse(fs.readFileSync(dbFile))
+
+function saveDB(){
+fs.writeFileSync(dbFile, JSON.stringify(db,null,2))
+}
+
+function runtime(seconds){
+seconds = Number(seconds)
+const h = Math.floor(seconds / 3600)
+const m = Math.floor(seconds % 3600 / 60)
+const s = Math.floor(seconds % 60)
+return `${h}h ${m}m ${s}s`
+}
 
 async function startBot(){
 
-const { state, saveCreds } = await useMultiFileAuthState("./session")
+const { state, saveCreds } = await useMultiFileAuthState("session")
 const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
-logger: pino({ level: "silent" }),
+logger: P({ level: "silent" }),
+printQRInTerminal: true,
 auth: state,
-version,
-browser: ["farid-bot","Chrome","1.0.0"],
-emitOwnEvents: true
+version
 })
 
 sock.ev.on("creds.update", saveCreds)
 
-sock.ev.on("connection.update",(update)=>{
+sock.ev.on("connection.update", ({ connection }) => {
 
-const { connection, lastDisconnect } = update
-
-if(connection === "close"){
-
-const shouldReconnect =
-(lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
-
-if(shouldReconnect){
-startBot()
-}
-
-}else if(connection === "open"){
-
+if(connection === "open"){
 console.log("✅ BOT FARID CONNECTED")
-
 }
 
 })
 
 sock.ev.on("messages.upsert", async ({ messages }) => {
 
-try{
+const msg = messages[0]
+if (!msg.message) return
+if (msg.key.remoteJid === "status@broadcast") return
 
-const m = messages[0]
-if(!m.message) return
+const from = msg.key.remoteJid
+const sender = msg.key.participant || msg.key.remoteJid
 
-const from = m.key.remoteJid
-const isGroup = from.endsWith("@g.us")
-
-const sender =
-m.key.fromMe
-? sock.user.id
-: (m.key.participant || m.key.remoteJid)
-
-const text =
-m.message?.conversation ||
-m.message?.extendedTextMessage?.text ||
-m.message?.imageMessage?.caption ||
+const body =
+msg.message.conversation ||
+msg.message.extendedTextMessage?.text ||
 ""
 
-if(!text) return
-if(!text.startsWith(prefix)) return
+if (!body.startsWith(prefix)) return
 
-const command = text.slice(1).split(" ")[0]
+const command = body.slice(1).split(" ")[0]
 
-const pushname = m.pushName || "User"
+if (!db.users[sender]){
+db.users[sender] = {
+money: 0,
+lastclaim: 0
+}
+}
 
-console.log("Pesan:", text)
+const user = db.users[sender]
 
 switch(command){
 
-// MENU
 case "menu":
 
-let pp
-
-try{
-pp = await sock.profilePictureUrl(sender,"image")
-}catch{
-pp = "https://telegra.ph/file/6880771a42bad09dd6087.jpg"
-}
-
-let runtime = Math.floor((Date.now() - startTime)/1000)
-
-let menu = `
-╭──❍「 USER INFO 」❍
-├ Nama : ${pushname}
+let menu = `╭──❍「 USER INFO 」❍
+├ Nama : ${msg.pushName}
 ├ Id : ${sender.split("@")[0]}
 ├ User : Member
 ├ Limit : Infinity
 ╰─┬────❍
 
 ╭─┴─❍「 BOT INFO 」❍
-├ Nama Bot : farid-bot
+├ Nama Bot : ${botname}
 ├ Owner : ${owner}
-├ Runtime : ${runtime}s
+├ Runtime : ${runtime(process.uptime())}
 ├ Prefix : .
 ╰─┬────❍
 
@@ -114,101 +104,88 @@ let menu = `
 │□ .owner
 │□ .ping
 │□ .runtime
-╰────❍
-`
+│□ .claim
+╰────❍`
 
-await sock.sendMessage(from,{
-image:{url:pp},
-caption:menu
-})
-
+await sock.sendMessage(from,{ text: menu })
 break
 
 
-// PROFILE
 case "profile":
 
-let ppfoto
-
-try{
-ppfoto = await sock.profilePictureUrl(sender,"image")
-}catch{
-ppfoto = "https://telegra.ph/file/6880771a42bad09dd6087.jpg"
-}
-
-let statusUser = "Member"
-
-if(sender.includes(owner)){
-statusUser = "Owner"
-}
-
-if(isGroup){
-
-let groupMetadata = await sock.groupMetadata(from)
-
-let admins = groupMetadata.participants
-.filter(v => v.admin !== null)
-.map(v => v.id)
-
-if(admins.includes(sender)){
-statusUser = "Admin Group"
-}
-
-}
-
-let profile = `
-╭──❍「 PROFILE 」❍
-├ Nama : ${pushname}
-├ Nomor : ${sender.split("@")[0]}
-├ Status : ${statusUser}
-├ Chat : ${isGroup ? "Group" : "Private"}
-╰────❍
-`
-
 await sock.sendMessage(from,{
-image:{url:ppfoto},
-caption:profile
-})
+text:`👤 PROFILE
 
+Nama : ${msg.pushName}
+ID : ${sender.split("@")[0]}
+Money : ${user.money}`
+})
 break
 
 
-// OWNER
 case "owner":
 
 await sock.sendMessage(from,{
-text:"Owner Bot : "+owner
+text:`👑 Owner Bot
+wa.me/${owner}`
 })
-
 break
 
 
-// PING
 case "ping":
 
 await sock.sendMessage(from,{
-text:"🏓 Pong"
+text:"🏓 Pong!"
 })
-
 break
 
 
-// RUNTIME
 case "runtime":
 
-let run = Math.floor((Date.now() - startTime)/1000)
+await sock.sendMessage(from,{
+text:`⏱ Runtime : ${runtime(process.uptime())}`
+})
+break
+
+
+case "claim":
+
+let now = Date.now()
+let sehari = 86400000
+
+if(now - user.lastclaim < sehari){
+
+let sisa = sehari - (now - user.lastclaim)
+
+let jam = Math.floor(sisa / 3600000)
+let menit = Math.floor(sisa / 60000) % 60
 
 await sock.sendMessage(from,{
-text:"Bot sudah berjalan "+run+" detik"
+text:`❌ Kamu sudah claim hari ini
+
+Coba lagi dalam
+${jam} jam ${menit} menit`
 })
 
-break
+} else {
+
+let hadiah = Math.floor(Math.random() * 5000) + 1000
+
+user.money += hadiah
+user.lastclaim = now
+saveDB()
+
+await sock.sendMessage(from,{
+text:`🎁 CLAIM BERHASIL
+
+Kamu mendapat 💰 ${hadiah}
+
+Total uang : ${user.money}`
+})
 
 }
 
-}catch(err){
-
-console.log("ERROR:",err)
+break
 
 }
 
