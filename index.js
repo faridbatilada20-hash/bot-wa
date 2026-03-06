@@ -29,7 +29,8 @@ const sock = makeWASocket({
 logger: pino({ level: "silent" }),
 auth: state,
 version,
-emitOwnEvents: true
+emitOwnEvents: true,
+printQRInTerminal: false
 })
 
 sock.ev.on("creds.update", saveCreds)
@@ -42,10 +43,11 @@ const code = await sock.requestPairingCode(phone)
 
 console.log(`
 ========================
-PAIRING CODE BOT
+PAIRING CODE
 ${code}
 ========================
 `)
+
 }
 
 sock.ev.on("connection.update",(update)=>{
@@ -57,7 +59,10 @@ if(connection === "close"){
 const shouldReconnect =
 (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== DisconnectReason.loggedOut
 
-if(shouldReconnect) startBot()
+if(shouldReconnect){
+console.log("Reconnect...")
+startBot()
+}
 
 }else if(connection === "open"){
 
@@ -67,9 +72,7 @@ console.log("✅ BOT FARID CONNECTED")
 
 })
 
-sock.ev.on("messages.upsert", async ({ messages, type }) => {
-
-if(type !== "notify") return
+sock.ev.on("messages.upsert", async ({ messages }) => {
 
 const m = messages[0]
 if(!m.message) return
@@ -88,14 +91,15 @@ m.message?.imageMessage?.caption ||
 
 if(!text) return
 
-const pushname = m.pushName || "User"
-
 if(selfMode && !sender.includes(owner)) return
+
 if(!text.startsWith(prefix)) return
 
 const command = text.slice(1).split(" ")[0]
 
-console.log("Pesan masuk:", text)
+const pushname = m.pushName || "User"
+
+console.log("Pesan:", text)
 
 switch(command){
 
@@ -112,22 +116,26 @@ pp = "https://telegra.ph/file/6880771a42bad09dd6087.jpg"
 let menu = `
 ╭──❍「 USER INFO 」❍
 ├ Nama : ${pushname}
-├ Nomor : ${sender.split("@")[0]}
-├ Status : ${sender.includes(owner) ? "Owner" : "User"}
-╰────❍
+├ Id : ${sender.split("@")[0]}
+├ User : Member
+├ Limit : Infinity
+╰─┬────❍
 
-╭──❍「 BOT INFO 」❍
-├ Bot : farid-bot
+╭─┴─❍「 BOT INFO 」❍
+├ Nama Bot : farid-bot
 ├ Owner : ${owner}
 ├ Mode : ${selfMode ? "SELF" : "PUBLIC"}
-╰────❍
+├ Prefix : .
+╰─┬────❍
 
-╭──❍「 MENU 」❍
-│ .menu
-│ .profile
-│ .owner
-│ .self
-│ .selfout
+╭─┴❍「 BOT MENU 」❍
+│□ .menu
+│□ .profile
+│□ .ping
+│□ .owner
+│□ .runtime
+│□ .self
+│□ .selfout
 ╰────❍
 `
 
@@ -138,13 +146,6 @@ caption:menu
 
 break
 
-case "owner":
-
-await sock.sendMessage(from,{
-text:"Owner : "+owner
-})
-
-break
 
 case "profile":
 
@@ -163,11 +164,11 @@ statusUser = "Owner"
 }
 
 if(from.endsWith("@g.us")){
-let groupMetadata = await sock.groupMetadata(from)
+let metadata = await sock.groupMetadata(from)
 
-let admins = groupMetadata.participants
-.filter(v => v.admin !== null)
-.map(v => v.id)
+let admins = metadata.participants
+.filter(v=>v.admin!==null)
+.map(v=>v.id)
 
 if(admins.includes(sender)){
 statusUser = "Admin Group"
@@ -192,17 +193,16 @@ caption:textProfile
 
 break
 
+
 case "self":
 
 if(!sender.includes(owner)) return
 
 selfMode = true
 
-await sock.sendMessage(from,{
-text:"Bot sekarang SELF MODE"
-})
-
+sock.sendMessage(from,{text:"Bot sekarang SELF MODE"})
 break
+
 
 case "selfout":
 
@@ -210,10 +210,25 @@ if(!sender.includes(owner)) return
 
 selfMode = false
 
-await sock.sendMessage(from,{
-text:"Bot sekarang PUBLIC MODE"
-})
+sock.sendMessage(from,{text:"Bot sekarang PUBLIC MODE"})
+break
 
+
+case "ping":
+
+sock.sendMessage(from,{text:"🏓 Pong"})
+break
+
+
+case "owner":
+
+sock.sendMessage(from,{text:"Owner : "+owner})
+break
+
+
+case "runtime":
+
+sock.sendMessage(from,{text:"Bot sedang berjalan"})
 break
 
 }
