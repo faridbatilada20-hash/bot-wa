@@ -1,9 +1,7 @@
-import makeWASocket, { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys"
+import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys"
 import pino from "pino"
 import fs from "fs"
-import chalk from "chalk"
 
-const owner = "628388407448"
 const prefix = "."
 const dbFile = "./database.json"
 
@@ -33,7 +31,7 @@ sock.ev.on("connection.update", async (update)=>{
 const { connection } = update
 
 if(connection === "open"){
-console.log(chalk.green("BOT TERHUBUNG"))
+console.log("BOT TERHUBUNG")
 }
 
 if(connection === "close"){
@@ -41,39 +39,20 @@ startBot()
 }
 })
 
-if (!sock.authState.creds.registered) {
+if(!sock.authState.creds.registered){
 
 const nomor = await new Promise(resolve=>{
-process.stdout.write("Masukkan nomor WhatsApp (contoh 628xxx): ")
+process.stdout.write("Masukkan nomor WhatsApp: ")
 process.stdin.once("data",data=>{
 resolve(data.toString().trim())
 })
 })
 
-setTimeout(async ()=>{
-
-try{
-
+setTimeout(async()=>{
 const code = await sock.requestPairingCode(nomor)
 console.log("PAIRING CODE:", code)
-
-}catch(e){
-
-console.log("Gagal mendapatkan pairing code")
-
-}
-
 },4000)
 
-}
-
-const nomor = await new Promise(resolve=>{
-process.stdout.write("Masukkan nomor WhatsApp: ")
-process.stdin.once("data",data=>resolve(data.toString().trim()))
-})
-
-const code = await sock.requestPairingCode(nomor)
-console.log("PAIRING CODE :", code)
 }
 
 sock.ev.on("messages.upsert", async ({ messages })=>{
@@ -92,11 +71,7 @@ msg.message.imageMessage?.caption ||
 ""
 
 if(!db.users[sender]){
-db.users[sender] = {
-money:100,
-afk:false,
-reason:""
-}
+db.users[sender] = { money:100, afk:false, reason:"" }
 saveDB()
 }
 
@@ -118,47 +93,31 @@ case "menu":
 
 try{
 
-let pp = await sock.profilePictureUrl(sender, "image")
+let pp = await sock.profilePictureUrl(sender,"image")
 
 let menu = `
-╭──❍ *USER-INFO*
+╭──❍ FARID-MD BOT
 ├ User : ${pushname}
 ├ Nomor : ${sender.split("@")[0]}
 ├ Money : ${db.users[sender].money}
 ╰────❍
 
-╭─❍ MENU BOT
+╭─❍ BOT
 │□ .profile
 │□ .afk
 │□ .ping
-│□ .runtime
 │□ .rvo
-╰────❍
-   
-╭─❍ MENU GAME
-│□ .slot
-│□ .casino
-│□ .math
-╰────❍
-
-╭─❍ MENU FUN
-│□ .dadu
-│□ .apakah
-│□ .bisakah
-│□ .kapan
 ╰────❍
 `
 
 await sock.sendMessage(from,{
-image:{ url: pp },
-caption: menu
-},{quoted: msg})
+image:{url:pp},
+caption:menu
+},{quoted:msg})
 
 }catch{
 
-await sock.sendMessage(from,{
-text:"Tidak bisa mengambil foto profil"
-},{quoted:msg})
+await sock.sendMessage(from,{text:"Menu error mengambil foto profil"},{quoted:msg})
 
 }
 
@@ -193,11 +152,11 @@ let teks = `
 Nama : ${pushname}
 Nomor : ${sender.split("@")[0]}
 Money : ${db.users[sender].money}
-Status AFK : ${db.users[sender].afk}
+AFK : ${db.users[sender].afk}
 `
 
 await sock.sendMessage(from,{
-image:{ url:pp },
+image:{url:pp},
 caption:teks
 },{quoted:msg})
 
@@ -211,37 +170,11 @@ break
 
 case "rvo":
 
-if(!msg.message.extendedTextMessage?.contextInfo?.quotedMessage){
-await sock.sendMessage(from,{text:"Reply pesan"},{quoted:msg})
-return
+await sock.sendMessage(from,{text:"🔥"},{quoted:msg})
+
+break
+
 }
-
-await sock.sendMessage(from,{
-react:{
-text:"🔥",
-key: msg.message.extendedTextMessage.contextInfo.stanzaId
-}
-})
-
-break
-
-case "dadu":
-
-let angka = Math.floor(Math.random()*6)+1
-
-await sock.sendMessage(from,{
-text:`🎲 Dadu keluar : ${angka}`
-},{quoted:msg})
-
-break
-
-case "apakah":
-
-await sock.sendMessage(from,{
-text:["Iya","Tidak","Mungkin","Tidak tahu"][Math.floor(Math.random()*4)]
-},{quoted:msg})
-
-break
 
 })
 
