@@ -1,63 +1,64 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
+import makeWASocket, { DisconnectReason, useMultiFileAuthState } from "@whiskeysockets/baileys"
 import pino from "pino"
-import readline from "readline"
+import fs from "fs"
+import chalk from "chalk"
 
-const { state, saveCreds } = await useMultiFileAuthState("./session")
+const owner = "628388407448"
+const prefix = "."
+const dbFile = "./database.json"
 
-const afk = {}
-const claim = {}
+if (!fs.existsSync(dbFile)) {
+fs.writeFileSync(dbFile, JSON.stringify({ users:{} }, null, 2))
+}
 
-const rl = readline.createInterface({
-input: process.stdin,
-output: process.stdout
-})
+let db = JSON.parse(fs.readFileSync(dbFile))
 
-const question = (text) => new Promise(resolve => rl.question(text, resolve))
+function saveDB(){
+fs.writeFileSync(dbFile, JSON.stringify(db,null,2))
+}
 
 async function startBot(){
 
+const { state, saveCreds } = await useMultiFileAuthState("./session")
+
 const sock = makeWASocket({
-logger: pino({ level: "silent" }),
+logger: pino({ level:"silent" }),
 auth: state,
 browser: ["FARID-MD","Chrome","1.0"]
 })
 
+sock.ev.on("creds.update", saveCreds)
+
 sock.ev.on("connection.update", async (update)=>{
 const { connection } = update
 
-if(connection === "connecting"){
-console.log("Menghubungkan...")
-}
-
 if(connection === "open"){
-console.log("✅ BOT FARID CONNECTED")
+console.log(chalk.green("BOT TERHUBUNG"))
 }
 
 if(connection === "close"){
-console.log("Koneksi terputus, mencoba ulang...")
 startBot()
 }
+})
 
 if(!sock.authState.creds.registered){
 
-const nomor = await question("Masukkan nomor WhatsApp: ")
-const code = await sock.requestPairingCode(nomor)
-
-console.log("PAIRING CODE:",code)
-
-}
-
+const nomor = await new Promise(resolve=>{
+process.stdout.write("Masukkan nomor WhatsApp: ")
+process.stdin.once("data",data=>resolve(data.toString().trim()))
 })
 
-sock.ev.on("creds.update", saveCreds)
+const code = await sock.requestPairingCode(nomor)
+console.log("PAIRING CODE :", code)
+}
 
-sock.ev.on("messages.upsert", async ({messages})=>{
+sock.ev.on("messages.upsert", async ({ messages })=>{
 
 const msg = messages[0]
 if(!msg.message) return
 
 const from = msg.key.remoteJid
-const sender = msg.key.participant || from
+const sender = msg.key.participant || msg.key.remoteJid
 const pushname = msg.pushName || "User"
 
 const body =
@@ -66,167 +67,157 @@ msg.message.extendedTextMessage?.text ||
 msg.message.imageMessage?.caption ||
 ""
 
-const prefix="."
-const isCmd = body.startsWith(prefix)
-const command = isCmd ? body.slice(1).split(" ")[0] : ""
-const args = body.trim().split(/ +/).slice(1)
-
-const reply = (text)=>{
-sock.sendMessage(from,{text},{quoted:msg})
+if(!db.users[sender]){
+db.users[sender] = {
+money:100,
+afk:false,
+reason:""
+}
+saveDB()
 }
 
-const runtime=(seconds)=>{
-seconds=Number(seconds)
-const d=Math.floor(seconds/(3600*24))
-const h=Math.floor(seconds%(3600*24)/3600)
-const m=Math.floor(seconds%3600/60)
-const s=Math.floor(seconds%60)
-return `${d}d ${h}h ${m}m ${s}s`
+if(db.users[sender].afk){
+db.users[sender].afk = false
+db.users[sender].reason = ""
+await sock.sendMessage(from,{text:`${pushname} kembali dari AFK`},{quoted:msg})
+saveDB()
 }
 
-const run=runtime(process.uptime())
+if(!body.startsWith(prefix)) return
 
-// AFK RETURN
+const args = body.slice(prefix.length).trim().split(/ +/)
+const command = args.shift().toLowerCase()
 
-if(afk[sender]){
-let data=afk[sender]
-delete afk[sender]
+switch(command){
 
-reply(`@${pushname} kembali setelah ${runtime((Date.now()-data.time)/1000)}`)
-}
-
-// MENU
-
-if(command==="menu"){
-
-let menu=`╭──❍「 USER INFO 」❍
-├ Nama : ${pushname}
-├ Id : ${sender.split("@")[0]}
-├ User : Member
-├ Limit : Infinity
-╰─┬────❍
-
-╭─┴─❍「 BOT INFO 」❍
-├ Nama Bot : farid-bot
-├ Owner : 628388407448
-├ Runtime : ${run}
-├ Prefix : .
-╰─┬────❍
-
-╭─┴❍「 BOT MENU 」❍
-│□ .menu
-│□ .profile
-│□ .owner
-│□ .ping
-│□ .runtime
-│□ .claim
-│□ .afk
-│□ .rvo
-╰────❍`
-
-sock.sendMessage(from,{text:menu},{quoted:msg})
-
-}
-
-// PROFILE
-
-if(command==="profile"){
-
-let pp
+case "menu":
 
 try{
-pp = await sock.profilePictureUrl(sender,"image")
-}catch{
-pp="https://i.ibb.co/2Wz9Z9K/avatar.png"
-}
 
-sock.sendMessage(from,{
-image:{url:pp},
-caption:`Nama : ${pushname}
-Nomor : ${sender.split("@")[0]}
-Status : Member`
+let pp = await sock.profilePictureUrl(sender, "image")
+
+let menu = `
+╭──❍ *USER-INFO*
+├ User : ${pushname}
+├ Nomor : ${sender.split("@")[0]}
+├ Money : ${db.users[sender].money}
+╰────❍
+
+╭─❍ MENU BOT
+│□ .profile
+│□ .afk
+│□ .ping
+│□ .runtime
+│□ .rvo
+╰────❍
+   
+╭─❍ MENU GAME
+│□ .slot
+│□ .casino
+│□ .math
+╰────❍
+
+╭─❍ MENU FUN
+│□ .dadu
+│□ .apakah
+│□ .bisakah
+│□ .kapan
+╰────❍
+`
+
+await sock.sendMessage(from,{
+image:{ url: pp },
+caption: menu
+},{quoted: msg})
+
+}catch{
+
+await sock.sendMessage(from,{
+text:"Tidak bisa mengambil foto profil"
 },{quoted:msg})
 
 }
 
-// OWNER
+break
 
-if(command==="owner"){
-reply("Owner : 628388407448")
-}
+case "ping":
 
-// PING
+await sock.sendMessage(from,{text:"PONG 🏓"},{quoted:msg})
 
-if(command==="ping"){
-reply("Pong 🏓")
-}
+break
 
-// RUNTIME
+case "afk":
 
-if(command==="runtime"){
-reply(run)
-}
+let reason = args.join(" ") || "Tidak ada alasan"
+db.users[sender].afk = true
+db.users[sender].reason = reason
+saveDB()
 
-// CLAIM
+await sock.sendMessage(from,{
+text:`${pushname} sekarang AFK\nAlasan : ${reason}`
+},{quoted:msg})
 
-if(command==="claim"){
+break
 
-let id=sender
+case "profile":
 
-if(claim[id] && Date.now()-claim[id] < 86400000){
+try{
 
-reply("Kamu sudah claim hari ini")
+let pp = await sock.profilePictureUrl(sender,"image")
 
-}else{
+let teks = `
+Nama : ${pushname}
+Nomor : ${sender.split("@")[0]}
+Money : ${db.users[sender].money}
+Status AFK : ${db.users[sender].afk}
+`
 
-claim[id]=Date.now()
+await sock.sendMessage(from,{
+image:{ url:pp },
+caption:teks
+},{quoted:msg})
 
-reply("Berhasil claim uang 💰")
+}catch{
 
-}
-
-}
-
-// AFK
-
-if(command==="afk"){
-
-let alasan=args.join(" ") || "AFK"
-
-afk[sender]={
-reason:alasan,
-time:Date.now()
-}
-
-reply(`@${pushname} sedang AFK\nAlasan: ${alasan}`)
+await sock.sendMessage(from,{text:"Tidak bisa mengambil foto profil"},{quoted:msg})
 
 }
 
-// RVO
+break
 
-if(command==="rvo"){
+case "rvo":
 
-let quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
-
-if(!quoted){
-reply("Reply foto sekali lihat dengan .rvo")
+if(!msg.message.extendedTextMessage?.contextInfo?.quotedMessage){
+await sock.sendMessage(from,{text:"Reply pesan"},{quoted:msg})
 return
 }
 
-let view = quoted?.viewOnceMessageV2?.message?.imageMessage
-
-if(view){
-
-sock.sendMessage(from,{
-image:{url:view.url},
-caption:"Berhasil membuka view once"
+await sock.sendMessage(from,{
+react:{
+text:"🔥",
+key: msg.message.extendedTextMessage.contextInfo.stanzaId
+}
 })
 
-}else{
+break
 
-reply("Itu bukan view once")
+case "dadu":
 
-}
+let angka = Math.floor(Math.random()*6)+1
+
+await sock.sendMessage(from,{
+text:`🎲 Dadu keluar : ${angka}`
+},{quoted:msg})
+
+break
+
+case "apakah":
+
+await sock.sendMessage(from,{
+text:["Iya","Tidak","Mungkin","Tidak tahu"][Math.floor(Math.random()*4)]
+},{quoted:msg})
+
+break
 
 }
 
