@@ -243,8 +243,6 @@ text:["Iya","Tidak","Mungkin","Tidak tahu"][Math.floor(Math.random()*4)]
 
 break
 
-}
-
 })
 
 }
