@@ -1,4 +1,23 @@
-import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
+import makeWASocket,
+import readline from "readline"
+
+const rl = readline.createInterface({
+input: process.stdin,
+output: process.stdout
+})
+
+const question = (text) => new Promise(resolve => rl.question(text, resolve))
+
+if (!sock.authState.creds.registered) {
+
+const phone = await question("Masukkan nomor WhatsApp: ")
+
+const code = await sock.requestPairingCode(phone)
+
+console.log("Kode Pairing:", code)
+
+}
+ { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
 import pino from "pino"
 import fs from "fs"
 
@@ -15,11 +34,22 @@ auth: state,
 browser: ["FARID-MD","Chrome","1.0"]
 })
 
-if (!sock.authState.creds.registered) {
-const phone = "6280000000000"
-const code = await sock.requestPairingCode(phone)
-console.log("PAIRING CODE:", code)
+sock.ev.on("connection.update", async (update) => {
+const { connection } = update
+
+if(connection === "connecting"){
+console.log("🔄 Menghubungkan ke WhatsApp...")
 }
+
+if(connection === "open"){
+console.log("✅ BOT FARID CONNECTED")
+}
+
+if(connection === "close"){
+console.log("❌ Koneksi terputus, mencoba ulang...")
+startBot()
+}
+})
 
 sock.ev.on("creds.update", saveCreds)
 
