@@ -41,7 +41,31 @@ startBot()
 }
 })
 
-if(!sock.authState.creds.registered){
+if (!sock.authState.creds.registered) {
+
+const nomor = await new Promise(resolve=>{
+process.stdout.write("Masukkan nomor WhatsApp (contoh 628xxx): ")
+process.stdin.once("data",data=>{
+resolve(data.toString().trim())
+})
+})
+
+setTimeout(async ()=>{
+
+try{
+
+const code = await sock.requestPairingCode(nomor)
+console.log("PAIRING CODE:", code)
+
+}catch(e){
+
+console.log("Gagal mendapatkan pairing code")
+
+}
+
+},4000)
+
+}
 
 const nomor = await new Promise(resolve=>{
 process.stdout.write("Masukkan nomor WhatsApp: ")
