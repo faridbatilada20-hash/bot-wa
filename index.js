@@ -1,63 +1,62 @@
-import makeWASocket, { 
-DisconnectReason, 
-useMultiFileAuthState, 
-fetchLatestBaileysVersion 
+import makeWASocket,{
+useMultiFileAuthState,
+fetchLatestBaileysVersion
 } from "@whiskeysockets/baileys"
 
 import P from "pino"
 
-const owner = "628388407448@s.whatsapp.net"
-const botName = "FARID-MD"
 const prefix = "."
+const owner = "628388407448"
+const botname = "FARID-MD"
 
 let userDB = {}
 let afk = {}
 
-function runtime(seconds) {
-seconds = Number(seconds)
-var d = Math.floor(seconds / (3600*24))
-var h = Math.floor(seconds % (3600*24) / 3600)
-var m = Math.floor(seconds % 3600 / 60)
-var s = Math.floor(seconds % 60)
-return `${d}d ${h}h ${m}m ${s}s`
+function runtime(s){
+let h = Math.floor(s/3600)
+let m = Math.floor(s%3600/60)
+let d = Math.floor(s%60)
+return `${h}h ${m}m ${d}s`
+}
+
+function clockString(ms){
+let d = Math.floor(ms / 86400000)
+let h = Math.floor(ms / 3600000) % 24
+let m = Math.floor(ms / 60000) % 60
+let s = Math.floor(ms / 1000) % 60
+return `${d} hari ${h} jam ${m} menit ${s} detik`
 }
 
 async function startBot(){
 
 const { state, saveCreds } = await useMultiFileAuthState("./session")
-
 const { version } = await fetchLatestBaileysVersion()
 
 const sock = makeWASocket({
-logger: P({ level:"silent" }),
+logger:P({level:"silent"}),
 printQRInTerminal:true,
-auth: state,
+auth:state,
 version
 })
 
-sock.ev.on("creds.update", saveCreds)
+sock.ev.on("creds.update",saveCreds)
 
-sock.ev.on("connection.update", (update) => {
-
-const { connection } = update
-
-if(connection === "open"){
+sock.ev.on("connection.update",({connection})=>{
+if(connection==="open"){
 console.log("✅ BOT FARID CONNECTED")
 }
-
 })
 
-sock.ev.on("messages.upsert", async ({ messages }) => {
+sock.ev.on("messages.upsert",async({messages})=>{
 
 try{
 
 const m = messages[0]
-
 if(!m.message) return
-if(m.key && m.key.remoteJid === "status@broadcast") return
+if(m.key.remoteJid === "status@broadcast") return
 
 const from = m.key.remoteJid
-const sender = m.key.fromMe ? sock.user.id : m.key.participant || m.key.remoteJid
+const sender = m.key.participant || m.key.remoteJid
 
 const body =
 m.message.conversation ||
@@ -65,45 +64,49 @@ m.message.extendedTextMessage?.text ||
 m.message.imageMessage?.caption ||
 ""
 
-if(!body.startsWith(prefix)) return
-
-const command = body.slice(1).split(" ")[0].toLowerCase()
-const text = body.split(" ").slice(1).join(" ")
-
-console.log("Pesan:", command)
-
-const reply = (text) => sock.sendMessage(from,{text},{quoted:m})
-
 if(!userDB[sender]){
 userDB[sender] = {
-limit: Infinity,
-money: 0,
-lastclaim: 0
+money:0,
+lastclaim:0
 }
 }
 
 if(afk[sender]){
+let durasi = Date.now() - afk[sender].time
+let alasan = afk[sender].reason
 delete afk[sender]
-reply("AFK dimatikan")
+
+await sock.sendMessage(from,{
+text:`@${sender.split("@")[0]} telah kembali dari AFK
+Durasi: ${clockString(durasi)}
+Alasan sebelumnya: ${alasan}`,
+mentions:[sender]
+},{quoted:m})
 }
 
 let mentionUser = m.message?.extendedTextMessage?.contextInfo?.mentionedJid || []
 
 for(let user of mentionUser){
-
 if(afk[user]){
-reply(`@${user.split("@")[0]} sedang AFK\nAlasan: ${afk[user].reason}`,{
+let durasi = Date.now() - afk[user].time
+
+await sock.sendMessage(from,{
+text:`@${user.split("@")[0]} sedang AFK
+Alasan: ${afk[user].reason}
+Sejak: ${clockString(durasi)}`,
 mentions:[user]
-})
+},{quoted:m})
+}
 }
 
-}
+if(!body.startsWith(prefix)) return
+
+const command = body.slice(1).split(" ")[0]
+const text = body.split(" ").slice(1).join(" ")
 
 switch(command){
 
 case "menu":{
-
-let name = sender.split("@")[0]
 
 let pp
 try{
@@ -112,20 +115,18 @@ pp = await sock.profilePictureUrl(sender,"image")
 pp = "https://i.ibb.co/2Wz0n6T/avatar.png"
 }
 
-let uptime = runtime(process.uptime())
-
-let teks = `
+let menu = `
 ╭──❍「 USER INFO 」❍
-├ Nama : ${name}
-├ Id : ${name}
+├ Nama : ${sender.split("@")[0]}
+├ Id : ${sender.split("@")[0]}
 ├ User : Member
 ├ Limit : Infinity
 ╰─┬────❍
 
 ╭─┴─❍「 BOT INFO 」❍
-├ Nama Bot : farid-bot
-├ Owner : 628388407448
-├ Runtime : ${uptime}
+├ Nama Bot : ${botname}
+├ Owner : ${owner}
+├ Runtime : ${runtime(process.uptime())}
 ├ Prefix : .
 ╰─┬────❍
 
@@ -142,60 +143,47 @@ let teks = `
 
 await sock.sendMessage(from,{
 image:{url:pp},
-caption:teks,
-mentions:[sender]
+caption:menu
 },{quoted:m})
 
 }
 break
 
-case "profile":{
-
-let name = sender.split("@")[0]
-
-let isAdmin = "Member"
-
-if(from.endsWith("@g.us")){
-let meta = await sock.groupMetadata(from)
-let admin = meta.participants.find(v=>v.id===sender && v.admin)
-if(admin) isAdmin = "Admin"
-}
-
-let pp
-try{
-pp = await sock.profilePictureUrl(sender,"image")
-}catch{
-pp = "https://i.ibb.co/2Wz0n6T/avatar.png"
-}
-
-let teks = `
-╭──❍ PROFILE ❍
-├ Nama : ${name}
-├ Nomor : ${name}
-├ Status : ${isAdmin}
-├ Money : ${userDB[sender].money}
-├ Limit : Infinity
-╰────❍
-`
+case "profile":
 
 await sock.sendMessage(from,{
-image:{url:pp},
-caption:teks
+text:`👤 PROFILE
+
+Nama : ${sender.split("@")[0]}
+Nomor : ${sender.split("@")[0]}
+Money : ${userDB[sender].money}`
 },{quoted:m})
 
-}
 break
 
 case "owner":
-reply("Owner : 628388407448")
+
+await sock.sendMessage(from,{
+text:`👑 Owner
+wa.me/${owner}`
+},{quoted:m})
+
 break
 
 case "ping":
-reply("Pong 🏓")
+
+await sock.sendMessage(from,{
+text:"🏓 Pong!"
+},{quoted:m})
+
 break
 
 case "runtime":
-reply(runtime(process.uptime()))
+
+await sock.sendMessage(from,{
+text:`⏱ Runtime : ${runtime(process.uptime())}`
+},{quoted:m})
+
 break
 
 case "claim":{
@@ -203,15 +191,28 @@ case "claim":{
 let now = Date.now()
 
 if(now - userDB[sender].lastclaim < 86400000){
-return reply("Kamu sudah claim hari ini")
+
+let sisa = 86400000 - (now - userDB[sender].lastclaim)
+
+await sock.sendMessage(from,{
+text:`❌ Kamu sudah claim
+Coba lagi dalam ${clockString(sisa)}`
+},{quoted:m})
+
+return
 }
 
-let reward = 1000
+let reward = Math.floor(Math.random()*5000)+1000
 
 userDB[sender].money += reward
 userDB[sender].lastclaim = now
 
-reply(`Claim berhasil\nMoney +${reward}`)
+await sock.sendMessage(from,{
+text:`🎁 CLAIM BERHASIL
+
+Kamu mendapat 💰 ${reward}
+Total uang : ${userDB[sender].money}`
+},{quoted:m})
 
 }
 break
@@ -225,9 +226,11 @@ reason,
 time:Date.now()
 }
 
-reply(`@${sender.split("@")[0]} sekarang AFK\nAlasan: ${reason}`,{
+await sock.sendMessage(from,{
+text:`@${sender.split("@")[0]} sekarang AFK
+Alasan: ${reason}`,
 mentions:[sender]
-})
+},{quoted:m})
 
 }
 break
