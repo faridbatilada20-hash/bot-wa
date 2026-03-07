@@ -1,4 +1,4 @@
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys"
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
 import pino from "pino"
 import readline from "readline"
 
@@ -22,18 +22,7 @@ auth: state,
 browser: ["FARID-MD","Chrome","1.0"]
 })
 
-if(!sock.authState.creds.registered){
-
-const phone = await question("Masukkan nomor WhatsApp: ")
-const code = await sock.requestPairingCode(phone)
-
-console.log("PAIRING CODE:",code)
-
-}
-
-sock.ev.on("creds.update", saveCreds)
-
-sock.ev.on("connection.update", (update)=>{
+sock.ev.on("connection.update", async (update)=>{
 const { connection } = update
 
 if(connection === "connecting"){
@@ -44,7 +33,23 @@ if(connection === "open"){
 console.log("✅ BOT FARID CONNECTED")
 }
 
+if(connection === "close"){
+console.log("Koneksi terputus, mencoba ulang...")
+startBot()
+}
+
+if(!sock.authState.creds.registered){
+
+const nomor = await question("Masukkan nomor WhatsApp: ")
+const code = await sock.requestPairingCode(nomor)
+
+console.log("PAIRING CODE:",code)
+
+}
+
 })
+
+sock.ev.on("creds.update", saveCreds)
 
 sock.ev.on("messages.upsert", async ({messages})=>{
 
@@ -61,7 +66,7 @@ msg.message.extendedTextMessage?.text ||
 msg.message.imageMessage?.caption ||
 ""
 
-const prefix = "."
+const prefix="."
 const isCmd = body.startsWith(prefix)
 const command = isCmd ? body.slice(1).split(" ")[0] : ""
 const args = body.trim().split(/ +/).slice(1)
@@ -70,21 +75,21 @@ const reply = (text)=>{
 sock.sendMessage(from,{text},{quoted:msg})
 }
 
-const runtime = (seconds)=>{
-seconds = Number(seconds)
-const d = Math.floor(seconds / (3600*24))
-const h = Math.floor(seconds % (3600*24) / 3600)
-const m = Math.floor(seconds % 3600 / 60)
-const s = Math.floor(seconds % 60)
+const runtime=(seconds)=>{
+seconds=Number(seconds)
+const d=Math.floor(seconds/(3600*24))
+const h=Math.floor(seconds%(3600*24)/3600)
+const m=Math.floor(seconds%3600/60)
+const s=Math.floor(seconds%60)
 return `${d}d ${h}h ${m}m ${s}s`
 }
 
-const run = runtime(process.uptime())
+const run=runtime(process.uptime())
 
 // AFK RETURN
 
 if(afk[sender]){
-let data = afk[sender]
+let data=afk[sender]
 delete afk[sender]
 
 reply(`@${pushname} kembali setelah ${runtime((Date.now()-data.time)/1000)}`)
@@ -92,9 +97,9 @@ reply(`@${pushname} kembali setelah ${runtime((Date.now()-data.time)/1000)}`)
 
 // MENU
 
-if(command === "menu"){
+if(command==="menu"){
 
-let menu = `╭──❍「 USER INFO 」❍
+let menu=`╭──❍「 USER INFO 」❍
 ├ Nama : ${pushname}
 ├ Id : ${sender.split("@")[0]}
 ├ User : Member
@@ -123,16 +128,16 @@ sock.sendMessage(from,{text:menu},{quoted:msg})
 
 }
 
-// PROFILE (pakai foto profil)
+// PROFILE
 
-if(command === "profile"){
+if(command==="profile"){
 
 let pp
 
 try{
 pp = await sock.profilePictureUrl(sender,"image")
 }catch{
-pp = "https://i.ibb.co/2Wz9Z9K/avatar.png"
+pp="https://i.ibb.co/2Wz9Z9K/avatar.png"
 }
 
 sock.sendMessage(from,{
@@ -146,35 +151,35 @@ Status : Member`
 
 // OWNER
 
-if(command === "owner"){
+if(command==="owner"){
 reply("Owner : 628388407448")
 }
 
 // PING
 
-if(command === "ping"){
+if(command==="ping"){
 reply("Pong 🏓")
 }
 
 // RUNTIME
 
-if(command === "runtime"){
+if(command==="runtime"){
 reply(run)
 }
 
 // CLAIM
 
-if(command === "claim"){
+if(command==="claim"){
 
-let id = sender
+let id=sender
 
-if(claim[id] && Date.now() - claim[id] < 86400000){
+if(claim[id] && Date.now()-claim[id] < 86400000){
 
 reply("Kamu sudah claim hari ini")
 
 }else{
 
-claim[id] = Date.now()
+claim[id]=Date.now()
 
 reply("Berhasil claim uang 💰")
 
@@ -184,13 +189,13 @@ reply("Berhasil claim uang 💰")
 
 // AFK
 
-if(command === "afk"){
+if(command==="afk"){
 
-let alasan = args.join(" ") || "AFK"
+let alasan=args.join(" ") || "AFK"
 
-afk[sender] = {
-reason: alasan,
-time: Date.now()
+afk[sender]={
+reason:alasan,
+time:Date.now()
 }
 
 reply(`@${pushname} sedang AFK\nAlasan: ${alasan}`)
@@ -199,7 +204,7 @@ reply(`@${pushname} sedang AFK\nAlasan: ${alasan}`)
 
 // RVO
 
-if(command === "rvo"){
+if(command==="rvo"){
 
 let quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage
 
